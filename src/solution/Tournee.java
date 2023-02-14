@@ -26,7 +26,7 @@ public class Tournee {
     public boolean ajouterClient(Client clientToAdd) {
         if(this.demandeTotale + clientToAdd.getDemande() > this.capacite) return false;
         this.demandeTotale += clientToAdd.getDemande();
-        if(this.coutTotal == 0) { // il n'y a pas encore de client dans la tournée
+        if(this.clients.size() == 0) { // il n'y a pas encore de client dans la tournée
             this.coutTotal += 2 * clientToAdd.getCoutVers(this.depot); // 2x pour aller-retour
         } else { // il y a déjà un client dans la tournée
             // enlever le cout entre le dernier client et le depot
@@ -37,6 +37,46 @@ public class Tournee {
             this.coutTotal += clientToAdd.getCoutVers(this.depot);
         }
         this.clients.add(clientToAdd);
+        return true;
+    }
+
+    public boolean check() {
+        if(!checkDemandeTotale()) {
+            System.out.println("Tournée irréalisable: demande totale incorrecte");
+            return false;
+        }
+        if(!this.checkCoutTotal()) {
+            System.out.println("Tournée irréalisable: coût total incorrect");
+            return false;
+        }
+        if(this.demandeTotale > this.capacite) {
+            System.out.println("Tournée irréalisable: demande totale supérieure à la capacité");
+            return false;
+        }
+        return true;
+    }
+
+    private boolean checkCoutTotal() {
+        int coutTotal = 0;
+        if(this.clients.size() == 1) { // si il n'y a qu'un seul client dans la tournée
+            coutTotal += 2 * this.depot.getCoutVers(this.clients.getFirst());
+        } else { // si il y a plus d'un client dans la tournée
+            coutTotal += this.depot.getCoutVers(this.clients.getFirst());
+            for(int i = 1; i < this.clients.size(); i++) {
+                coutTotal += this.clients.get(i).getCoutVers(this.clients.get(i - 1));
+            }
+            coutTotal += this.clients.getLast().getCoutVers(this.depot);
+        }
+        if(coutTotal != this.coutTotal) return false;
+        return true;
+    }
+
+    private boolean checkDemandeTotale() {
+        int demandeTotale = 0;
+        for(Client c : this.clients) {
+            demandeTotale += c.getDemande();
+        }
+        if(demandeTotale != this.demandeTotale) return false;
         return true;
     }
 
@@ -57,7 +97,7 @@ public class Tournee {
     }
 
     public LinkedList<Client> getClients() {
-        return clients;
+        return (LinkedList<Client>) this.clients.clone();
     }
 
     @Override
