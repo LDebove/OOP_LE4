@@ -17,9 +17,9 @@ public class Client extends Point {
     @Override
     public String toString() {
         return "Client{" +
-                "demande=" + demande +
-                super.toString() +
-                '}';
+                "\n\tdemande=" + demande +
+                "\n\t" + super.toString() +
+                "\n}";
     }
 
     public static void main(String[] args) {

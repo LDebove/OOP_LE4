@@ -5,6 +5,7 @@ import instance.reseau.Client;
 import instance.reseau.Depot;
 import io.InstanceReader;
 import io.exception.ReaderException;
+import operateur.*;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -54,7 +55,7 @@ public class Solution {
         int _coutTotal = last.getCoutTotal();
         boolean result = last.ajouterClient(clientToAdd);
         if(!result) return false;
-        this.coutTotal += last.getCoutTotal() - _coutTotal;
+        this.coutTotal = this.calcCoutTotal();
         return true;
     }
 
@@ -65,6 +66,23 @@ public class Solution {
                 this.ajouterClientNouvelleTournee(client);
             }
         }
+    }
+
+    public InsertionClient getMeilleureInsertion(Client clientToInsert) {
+        InsertionClient bestInsertion = new InsertionClient();
+        for(Tournee t: this.tournees) {
+            InsertionClient o = t.getMeilleureInsertion(clientToInsert);
+            if(o != null && o.isMouvementRealisable() && o.isMeilleur(bestInsertion)) {
+                bestInsertion = o;
+            }
+        }
+        return bestInsertion;
+    }
+
+    public boolean doInsertion(InsertionClient infos) {
+        boolean result = infos.doMouvementIfRealisable();
+        if (result) this.coutTotal += infos.getDeltaCout();
+        return result;
     }
 
     private int calcCoutTotal() {
@@ -116,7 +134,10 @@ public class Solution {
         for(Tournee t : this.tournees) {
             coutTotal += t.getCoutTotal();
         }
-        if(coutTotal != this.coutTotal) return false;
+        if(coutTotal != this.coutTotal) {
+            System.out.println("Coût total attendu: " + coutTotal + ", coût total calculé: " + this.coutTotal);
+            return false;
+        }
         return true;
     }
 
@@ -141,8 +162,36 @@ public class Solution {
         return true;
     }
 
-    private boolean checkClients() {
-        return true;
+    private OperateurLocal getMeilleurOperateurIntra(TypeOperateurLocal type) {
+        OperateurLocal best = OperateurLocal.getOperateur(type);
+        for(Tournee tournee: this.tournees) {
+            OperateurLocal op = tournee.getMeilleurOperateurIntra(type);
+            if(op.isMeilleur(best)) {
+                best = op;
+            }
+        }
+        return best;
+    }
+
+    public OperateurLocal getMeilleurOperateurLocal(TypeOperateurLocal type) {
+        if(OperateurLocal.getOperateur(type) instanceof OperateurIntraTournee) {
+            return this.getMeilleurOperateurIntra(type);
+        } else if(OperateurLocal.getOperateur(type) instanceof OperateurInterTournees) {
+            return null; //TODO changer
+        }
+        return null;
+    }
+
+    public boolean doMouvementRechercheLocale(OperateurLocal infos) {
+        if(infos == null) return false;
+        boolean result = infos.doMouvementIfRealisable();
+        if(result) this.coutTotal += infos.getDeltaCout();
+        if(!this.check()) {
+            System.out.println(infos);
+            System.out.println(this);
+            System.exit(-1);
+        }
+        return result;
     }
 
     public int getCoutTotal() {
@@ -160,10 +209,9 @@ public class Solution {
     @Override
     public String toString() {
         return "Solution{" +
-                "coutTotal=" + coutTotal +
-                //", instance=" + instance +
-                ", tournees=" + tournees +
-                '}';
+                "\n\tcoutTotal=" + coutTotal +
+                ", \n\ttournees=" + tournees +
+                "\n}";
     }
 
     public static void main(String[] args) {

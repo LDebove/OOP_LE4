@@ -45,9 +45,7 @@ public abstract class Point {
      */
     public int getCoutVers(Point destination) {
         Route route = this.routes.get(destination);
-        if(route == null) {
-            return Integer.MAX_VALUE;
-        }
+        if(route == null) return Integer.MAX_VALUE;
         return route.getCout();
     }
 

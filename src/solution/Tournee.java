@@ -3,8 +3,10 @@ package solution;
 import instance.Instance;
 import instance.reseau.Client;
 import instance.reseau.Depot;
+import instance.reseau.Point;
 import io.InstanceReader;
 import io.exception.ReaderException;
+import operateur.*;
 
 import java.util.LinkedList;
 
@@ -24,7 +26,7 @@ public class Tournee {
     }
 
     public boolean ajouterClient(Client clientToAdd) {
-        if(this.demandeTotale + clientToAdd.getDemande() > this.capacite) return false;
+        if(!this.isClientAjoutable(clientToAdd)) return false;
         this.demandeTotale += clientToAdd.getDemande();
         if(this.clients.size() == 0) { // il n'y a pas encore de client dans la tournée
             this.coutTotal += 2 * clientToAdd.getCoutVers(this.depot); // 2x pour aller-retour
@@ -32,11 +34,15 @@ public class Tournee {
             // enlever le cout entre le dernier client et le depot
             // ajouter le cout entre le dernier client et le nouveau client
             // ajouter le cout entre le nouveau client et le dépôt
-            this.coutTotal -= this.clients.getLast().getCoutVers(this.depot);
-            this.coutTotal += this.clients.getLast().getCoutVers(clientToAdd);
-            this.coutTotal += clientToAdd.getCoutVers(this.depot);
+            //this.coutTotal -= this.clients.getLast().getCoutVers(this.depot);
+            this.coutTotal += this.deltaCoutInsertion(this.clients.size(), clientToAdd);
         }
         this.clients.add(clientToAdd);
+        return true;
+    }
+
+    private boolean isClientAjoutable(Client clientToAdd) {
+        if(this.demandeTotale + clientToAdd.getDemande() > this.capacite) return false;
         return true;
     }
 
@@ -50,6 +56,7 @@ public class Tournee {
             return false;
         }
         if(this.demandeTotale > this.capacite) {
+            System.out.println("Demande totale: " + this.demandeTotale + ", capacité: " + this.capacite);
             System.out.println("Tournée irréalisable: demande totale supérieure à la capacité");
             return false;
         }
@@ -67,7 +74,10 @@ public class Tournee {
             }
             coutTotal += this.clients.getLast().getCoutVers(this.depot);
         }
-        if(coutTotal != this.coutTotal) return false;
+        if(coutTotal != this.coutTotal) {
+            System.out.println("Coût total attendu: " + coutTotal + ", coût total calculé: " + this.coutTotal);
+            return false;
+        }
         return true;
     }
 
@@ -76,7 +86,165 @@ public class Tournee {
         for(Client c : this.clients) {
             demandeTotale += c.getDemande();
         }
-        if(demandeTotale != this.demandeTotale) return false;
+        if(demandeTotale != this.demandeTotale) {
+            System.out.println("Demande totale attendue: " + demandeTotale + ", Demande totale calculée: " + this.demandeTotale);
+            return false;
+        }
+        return true;
+    }
+
+    private Point getPrec(int position) {
+        if(position == 0) return this.depot;
+        return this.clients.get(position - 1);
+    }
+
+    private Point getCurrent(int position) {
+        if(position == this.clients.size()) return this.depot;
+        return this.clients.get(position);
+    }
+
+    private Point getNext(int position) {
+        if(position == this.clients.size() - 1) return this.depot;
+        return this.clients.get(position + 1);
+    }
+
+    public int deltaCoutSupression(int position) {
+        int cout = 0;
+        Point last = this.getPrec(position);
+        Point current = this.getCurrent(position);
+        Point next = this.getNext(position);
+        if(last == next) {
+           return - 2 * current.getCoutVers(next);
+        }
+        return last.getCoutVers(next) - last.getCoutVers(current) - current.getCoutVers(next);
+    }
+
+    private boolean isDeplacementValide(int positionClient1, int positionClient2) {
+        if(!this.isPositionValide(positionClient1) || !this.isPositionValide(positionClient2) || Math.abs(positionClient1 - positionClient2) <= 1) return false;
+        return true;
+    }
+
+    public int deltaCoutDeplacement(int positionClient1, int positionClient2) {
+        if(!isDeplacementValide(positionClient1, positionClient2)) return Integer.MAX_VALUE;
+        return this.deltaCoutInsertion(positionClient2, this.getClient(positionClient1)) + this.deltaCoutSupression(positionClient1);
+    }
+
+    private boolean isEchangeValide(int positionClient1, int positionClient2) {
+        if(!isPositionValide(positionClient1) || !isPositionValide(positionClient2) || positionClient1 >= positionClient2) return false;
+        return true;
+    }
+
+    public int deltaCoutEchange(int positionClient1, int positionClient2) {
+        if(!isEchangeValide(positionClient1, positionClient2)) return Integer.MAX_VALUE;
+        if(positionClient2 - positionClient1 == 1) return this.deltaCoutEchangeConsecutif(positionClient1);
+        return this.deltaCoutRemplacement(positionClient1, this.clients.get(positionClient2)) + this.deltaCoutRemplacement(positionClient2, this.clients.get(positionClient1));
+    }
+
+    private int deltaCoutEchangeConsecutif(int position) {
+        Point last = this.getPrec(position);
+        Point client1 = this.getCurrent(position);
+        Point client2 = this.getCurrent(position + 1);
+        Point next = this.getNext(position + 1);
+        int cout = 0;
+        cout -= last.getCoutVers(client1) + client2.getCoutVers(next);
+        cout += last.getCoutVers(client2) + client1.getCoutVers(next);
+        return cout;
+    }
+
+    private int deltaCoutRemplacement(int position, Client client) {
+        Point last = this.getPrec(position);
+        Point current = this.getCurrent(position);
+        Point next = this.getNext(position);
+        int cout = 0;
+        cout -= last.getCoutVers(current) + current.getCoutVers(next);
+        cout += last.getCoutVers(client) + client.getCoutVers(next);
+        return cout;
+    }
+
+    public InsertionClient getMeilleureInsertion(Client clientToInsert) {
+        if(!this.isClientAjoutable(clientToInsert)) return null;
+        InsertionClient bestInsertion = new InsertionClient(this, clientToInsert, 0);
+        if(this.clients.size() > 0) {
+            for(int pos = 0; pos <= this.clients.size() + 1; pos++) {
+                InsertionClient ic = new InsertionClient(this, clientToInsert, pos);
+                if(ic.isMouvementRealisable() && ic.isMeilleur(bestInsertion)) {
+                    bestInsertion = ic;
+                }
+            }
+        }
+        return bestInsertion;
+    }
+
+    public OperateurLocal getMeilleurOperateurIntra(TypeOperateurLocal type) {
+        OperateurLocal best = OperateurLocal.getOperateur(type);
+        for(int positionClient1 = 0; positionClient1 < this.clients.size(); positionClient1++) {
+            for(int positionClient2 = 0; positionClient2 < this.clients.size(); positionClient2++) {
+                OperateurLocal op = OperateurLocal.getOperateurIntra(type, this, positionClient1, positionClient2);
+                if(op.isMeilleur(best)) {
+                    best = op;
+                }
+            }
+        }
+        return best;
+    }
+
+    public boolean doInsertion(InsertionClient infos) {
+        if(infos == null) return false;
+        //return this.ajouterClientPosition(infos.getClient(), infos.getPosition());
+        this.demandeTotale += infos.getClient().getDemande();
+        this.coutTotal += infos.getDeltaCout();
+        this.clients.add(infos.getPosition(), infos.getClient());
+        if(!this.check()) {
+            System.out.println(infos);
+            System.out.println(this);
+            System.exit(-1);
+        }
+        return true;
+    }
+
+    public boolean doDeplacement(IntraDeplacement infos) {
+        if(infos == null) return false;
+        this.coutTotal += infos.getDeltaCout();
+        this.clients.remove(infos.getPositionClient1());
+        if(infos.getPositionClient1() > infos.getPositionClient2()) {
+            this.clients.add(infos.getPositionClient2(), infos.getClient1());
+        } else {
+            this.clients.add(infos.getPositionClient2() - 1, infos.getClient1());
+        }
+        if(!this.check()) {
+            System.out.println(infos);
+            System.out.println(this);
+            System.exit(-1);
+        }
+        return true;
+    }
+
+    public boolean doEchange(IntraEchange infos) {
+        if(infos == null) return false;
+        this.coutTotal += infos.getDeltaCout();
+        this.clients.set(infos.getPositionClient1(), infos.getClient2());
+        this.clients.set(infos.getPositionClient2(), infos.getClient1());
+        if(!this.check()) {
+            System.out.println(infos);
+            System.out.println(this);
+            System.exit(-1);
+        }
+        return true;
+    }
+
+    public int deltaCoutInsertion(int position, Client clientToAdd) {
+        if(!this.isPositionInsertionValide(position)) return Integer.MAX_VALUE;
+        Point last = this.getPrec(position);
+        Point next = this.getCurrent(position);
+        int cout = 0;
+        cout += last.getCoutVers(clientToAdd);
+        cout += clientToAdd.getCoutVers(next);
+        if(last != next) cout -= last.getCoutVers(next);
+        return cout;
+    }
+
+    private boolean isPositionInsertionValide(int position) {
+        if(position < 0 || position > this.clients.size()) return false;
         return true;
     }
 
@@ -100,15 +268,25 @@ public class Tournee {
         return (LinkedList<Client>) this.clients.clone();
     }
 
+    public Client getClient(int position) {
+        if(!isPositionValide(position)) return null;
+        return this.clients.get(position);
+    }
+
+    private boolean isPositionValide(int position) {
+        if(position < 0 || position >= this.clients.size()) return false;
+        return true;
+    }
+
     @Override
     public String toString() {
         return "Tournee{" +
-                "capacite=" + capacite +
-                ", demandeTotale=" + demandeTotale +
-                ", coutTotal=" + coutTotal +
-                ", depot=" + depot +
-                ", clients=" + clients +
-                '}';
+                "\n\tcapacite=" + capacite +
+                ", \n\tdemandeTotale=" + demandeTotale +
+                ", \n\tcoutTotal=" + coutTotal +
+                ", \n\tdepot=" + depot +
+                ", \n\tclients=" + clients +
+                "\n}";
     }
 
     public static void main(String[] args) {
