@@ -26,7 +26,7 @@ public abstract class OperateurInterTournees extends OperateurLocal {
     public int evalDeltaCout() {
         this.deltaCoutTournee1 = this.evalDeltaCoutTournee();
         this.deltaCoutTournee2 = this.evalDeltaCoutTournee2();
-        if(this.deltaCoutTournee1 == Integer.MAX_VALUE || this.deltaCoutTournee1 == Integer.MAX_VALUE) {
+        if(this.deltaCoutTournee1 == Integer.MAX_VALUE || this.deltaCoutTournee2 == Integer.MAX_VALUE) {
             return Integer.MAX_VALUE;
         }
         return this.deltaCoutTournee1 + this.deltaCoutTournee2;

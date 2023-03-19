@@ -35,6 +35,14 @@ public abstract class OperateurLocal extends Operateur {
                 return new IntraEchange();
             }
 
+            case INTER_DEPLACEMENT -> {
+                return new InterDeplacement();
+            }
+
+            case INTER_ECHANGE -> {
+                return new InterEchange();
+            }
+
             default -> {
                 return null;
             }
@@ -43,6 +51,15 @@ public abstract class OperateurLocal extends Operateur {
 
     public static OperateurLocal getOperateurInter(TypeOperateurLocal type, Tournee tournee1, int positionClient1, Tournee tournee2, int positionClient2) {
         switch (type) {
+
+            case INTER_DEPLACEMENT -> {
+                return new InterDeplacement(tournee1, positionClient1, tournee2, positionClient2);
+            }
+
+            case INTER_ECHANGE -> {
+                return new InterEchange(tournee1, positionClient1, tournee2, positionClient2);
+            }
+
             default -> {
                 return null;
             }

@@ -173,11 +173,25 @@ public class Solution {
         return best;
     }
 
+    private OperateurLocal getMeilleurOperateurInter(TypeOperateurLocal type) {
+        OperateurLocal best = OperateurLocal.getOperateur(type);
+        for(Tournee tournee1: this.tournees) {
+            for(Tournee tournee2: this.tournees) {
+                if(tournee1 == tournee2) continue;
+                OperateurLocal op = tournee1.getMeilleurOperateurInter(type, tournee2);
+                if(op.isMeilleur(best)) {
+                    best = op;
+                }
+            }
+        }
+        return best;
+    }
+
     public OperateurLocal getMeilleurOperateurLocal(TypeOperateurLocal type) {
         if(OperateurLocal.getOperateur(type) instanceof OperateurIntraTournee) {
             return this.getMeilleurOperateurIntra(type);
         } else if(OperateurLocal.getOperateur(type) instanceof OperateurInterTournees) {
-            return null; //TODO changer
+            return this.getMeilleurOperateurInter(type);
         }
         return null;
     }

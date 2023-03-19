@@ -42,6 +42,7 @@ public class Tournee {
     }
 
     private boolean isClientAjoutable(Client clientToAdd) {
+        if(clientToAdd == null) return false;
         if(this.demandeTotale + clientToAdd.getDemande() > this.capacite) return false;
         return true;
     }
@@ -108,15 +109,14 @@ public class Tournee {
         return this.clients.get(position + 1);
     }
 
-    public int deltaCoutSupression(int position) {
-        int cout = 0;
-        Point last = this.getPrec(position);
-        Point current = this.getCurrent(position);
-        Point next = this.getNext(position);
-        if(last == next) {
-           return - 2 * current.getCoutVers(next);
-        }
-        return last.getCoutVers(next) - last.getCoutVers(current) - current.getCoutVers(next);
+    private boolean isPositionValide(int position) {
+        if(position < 0 || position >= this.clients.size()) return false;
+        return true;
+    }
+
+    private boolean isPositionInsertionValide(int position) {
+        if(position < 0 || position > this.clients.size()) return false;
+        return true;
     }
 
     private boolean isDeplacementValide(int positionClient1, int positionClient2) {
@@ -124,14 +124,41 @@ public class Tournee {
         return true;
     }
 
-    public int deltaCoutDeplacement(int positionClient1, int positionClient2) {
-        if(!isDeplacementValide(positionClient1, positionClient2)) return Integer.MAX_VALUE;
-        return this.deltaCoutInsertion(positionClient2, this.getClient(positionClient1)) + this.deltaCoutSupression(positionClient1);
-    }
-
     private boolean isEchangeValide(int positionClient1, int positionClient2) {
         if(!isPositionValide(positionClient1) || !isPositionValide(positionClient2) || positionClient1 >= positionClient2) return false;
         return true;
+    }
+
+    public int deltaCoutInsertion(int position, Client clientToAdd) {
+        if(!this.isPositionInsertionValide(position)) return Integer.MAX_VALUE;
+        Point last = this.getPrec(position);
+        Point next = this.getCurrent(position);
+        int cout = 0;
+        cout += last.getCoutVers(clientToAdd);
+        cout += clientToAdd.getCoutVers(next);
+        if(last != next) cout -= last.getCoutVers(next);
+        return cout;
+    }
+
+    public int deltaCoutInsertionInter(int position, Client clientToAdd) {
+        if(!isClientAjoutable(clientToAdd)) return Integer.MAX_VALUE;
+        return this.deltaCoutInsertion(position, clientToAdd);
+    }
+
+    public int deltaCoutSupression(int position) {
+        if(!this.isPositionValide(position)) return Integer.MAX_VALUE;
+        Point last = this.getPrec(position);
+        Point current = this.getCurrent(position);
+        Point next = this.getNext(position);
+        if(last == next) {
+            return - 2 * current.getCoutVers(next);
+        }
+        return last.getCoutVers(next) - last.getCoutVers(current) - current.getCoutVers(next);
+    }
+
+    public int deltaCoutDeplacement(int positionClient1, int positionClient2) {
+        if(!isDeplacementValide(positionClient1, positionClient2)) return Integer.MAX_VALUE;
+        return this.deltaCoutInsertion(positionClient2, this.getClient(positionClient1)) + this.deltaCoutSupression(positionClient1);
     }
 
     public int deltaCoutEchange(int positionClient1, int positionClient2) {
@@ -151,10 +178,12 @@ public class Tournee {
         return cout;
     }
 
-    private int deltaCoutRemplacement(int position, Client client) {
+    public int deltaCoutRemplacement(int position, Client client) {
+        if(position >= this.clients.size()) return Integer.MAX_VALUE;
         Point last = this.getPrec(position);
         Point current = this.getCurrent(position);
         Point next = this.getNext(position);
+        if(client == last || client == next) return Integer.MAX_VALUE;
         int cout = 0;
         cout -= last.getCoutVers(current) + current.getCoutVers(next);
         cout += last.getCoutVers(client) + client.getCoutVers(next);
@@ -188,9 +217,22 @@ public class Tournee {
         return best;
     }
 
+    public OperateurLocal getMeilleurOperateurInter(TypeOperateurLocal type, Tournee tournee2) {
+        if(this == tournee2) return null;
+        OperateurLocal best = OperateurLocal.getOperateur(type);
+        for(int positionClient1 = 0; positionClient1 < this.clients.size(); positionClient1++) {
+            for(int positionClient2 = 0; positionClient2 < tournee2.getClients().size(); positionClient2++) {
+                OperateurLocal op = OperateurLocal.getOperateurInter(type, this, positionClient1, tournee2, positionClient2);
+                if(op.isMeilleur(best)) {
+                    best = op;
+                }
+            }
+        }
+        return best;
+    }
+
     public boolean doInsertion(InsertionClient infos) {
         if(infos == null) return false;
-        //return this.ajouterClientPosition(infos.getClient(), infos.getPosition());
         this.demandeTotale += infos.getClient().getDemande();
         this.coutTotal += infos.getDeltaCout();
         this.clients.add(infos.getPosition(), infos.getClient());
@@ -219,6 +261,31 @@ public class Tournee {
         return true;
     }
 
+    public boolean doDeplacement(InterDeplacement infos) {
+        Tournee tournee2 = infos.getTournee2();
+        if(infos == null || !tournee2.isClientAjoutable(infos.getClient1())) return false;
+        // tournée 1
+        this.coutTotal += infos.getDeltaCoutTournee1();
+        this.demandeTotale -= infos.getClient1().getDemande();
+        this.clients.remove(infos.getPositionClient1());
+        // tournée 2
+        /*InsertionClient ic = new InsertionClient(tournee2, infos.getClient1(), infos.getPositionClient2());
+        tournee2.doInsertion(ic);*/
+        tournee2.doDeplacementTournee2(infos);
+        if(!this.check() || !tournee2.check()) {
+            System.out.println(infos);
+            System.out.println(this);
+            System.exit(-1);
+        }
+        return true;
+    }
+
+    private void doDeplacementTournee2(InterDeplacement infos) {
+        this.coutTotal += infos.getDeltaCoutTournee2();
+        this.demandeTotale += infos.getClient1().getDemande();
+        this.clients.add(infos.getPositionClient2(), infos.getClient1());
+    }
+
     public boolean doEchange(IntraEchange infos) {
         if(infos == null) return false;
         this.coutTotal += infos.getDeltaCout();
@@ -232,20 +299,31 @@ public class Tournee {
         return true;
     }
 
-    public int deltaCoutInsertion(int position, Client clientToAdd) {
-        if(!this.isPositionInsertionValide(position)) return Integer.MAX_VALUE;
-        Point last = this.getPrec(position);
-        Point next = this.getCurrent(position);
-        int cout = 0;
-        cout += last.getCoutVers(clientToAdd);
-        cout += clientToAdd.getCoutVers(next);
-        if(last != next) cout -= last.getCoutVers(next);
-        return cout;
+    public boolean doEchange(InterEchange infos) {
+        if(infos == null) return false;
+        Tournee tournee2 = infos.getTournee2();
+        Client client1 = infos.getClient1();
+        Client client2 = infos.getClient2();
+        // tournée 1
+        this.coutTotal += infos.getDeltaCoutTournee1();
+        this.demandeTotale += client2.getDemande() - client1.getDemande();
+        this.clients.remove(infos.getPositionClient1());
+        this.clients.add(infos.getPositionClient1(), client2);
+        // tournée 2
+        tournee2.doEchangeTournee2(infos);
+        if(!this.check() || !tournee2.check()) {
+            System.out.println(infos);
+            System.out.println(this);
+            System.exit(-1);
+        }
+        return true;
     }
 
-    private boolean isPositionInsertionValide(int position) {
-        if(position < 0 || position > this.clients.size()) return false;
-        return true;
+    private void doEchangeTournee2(InterEchange infos) {
+        this.coutTotal += infos.getDeltaCoutTournee2();
+        this.demandeTotale += infos.getClient1().getDemande() - infos.getClient2().getDemande();
+        this.clients.remove(infos.getPositionClient2());
+        this.clients.add(infos.getPositionClient2(), infos.getClient1());
     }
 
     public int getCapacite() {
@@ -271,11 +349,6 @@ public class Tournee {
     public Client getClient(int position) {
         if(!isPositionValide(position)) return null;
         return this.clients.get(position);
-    }
-
-    private boolean isPositionValide(int position) {
-        if(position < 0 || position >= this.clients.size()) return false;
-        return true;
     }
 
     @Override
